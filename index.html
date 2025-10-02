@@ -264,17 +264,42 @@
       reader.readAsText(file);
     });
 
-    function parseCardData(text) {
-      const lines = text.split('\n'), cards = [];
-      for (const line of lines) {
-        if (!line.trim() || line.includes('Serial') || line.includes('Pin')) continue;
-        const parts = line.trim().split(/\s+/);
-        if (parts.length >= 5) {
-          cards.push({ serial: parts[0], pin: parts[1], network: parts[2], amount: parts[3], date: parts.slice(4).join(' ') });
-        }
-      }
-      return cards;
+function parseCardData(text) {
+  const lines = text.split('\n'), cards = [];
+
+  for (const line of lines) {
+    if (!line.trim() || line.includes('Serial') || line.includes('Pin')) continue;
+    const parts = line.trim().split(/\s+/);
+
+    // --- Format 1: Serial Pin Network Amount Date ---
+    // Example: 00000034687996657 24737560435061426 MTN ₦100 2025-08-23 08:12:49
+    if (parts.length >= 5 && /^\d{14,}/.test(parts[0]) && /^\d{5,}/.test(parts[1])) {
+      cards.push({
+        serial: parts[0],
+        pin: parts[1],
+        network: parts[2],
+        amount: parts[3],
+        date: parts.slice(4).join(' ')
+      });
     }
+
+    // --- Format 2: Index Date Network Amount Serial Pin ---
+    // Example: 1 01/01/1970 @01:00:00 MTN 100 00000034687996608 92469577422819753
+    else if (parts.length >= 6 && /^\d+$/.test(parts[0]) && parts[2].startsWith('@')) {
+      cards.push({
+        index: parts[0],
+        date: parts[1] + " " + parts[2], // join date + @time
+        network: parts[3],
+        amount: parts[4],
+        serial: parts[5],
+        pin: parts[6]
+      });
+    }
+  }
+
+  return cards;
+}
+
 
     addBtn.addEventListener('click', () => {
       const newCards = parseCardData(textInput.value.trim());
