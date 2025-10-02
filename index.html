@@ -7,6 +7,10 @@
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
   <style>
+    :root {
+      --scale: 1;
+    }
+
     * {
       margin: 0;
       padding: 0;
@@ -154,26 +158,32 @@
 
     .card {
       border: 1px solid #ddd;
-      padding: 3mm;
+      padding: calc(2mm * var(--scale));
       display: flex;
       flex-direction: column;
       justify-content: space-between;
       width: 100%;
       height: 100%;
-      font-size: 8px;
+      font-size: calc(9px * var(--scale));
       background: white;
+      overflow: hidden;
     }
 
-    .card-logo { width: 30px; height: 30px; }
-    .card-amount { font-weight: bold; font-size: 11px; margin-bottom: 1mm; }
-    .card-ref { font-size: 11px; margin-bottom: 1mm; }
+    .card-logo { width: calc(25px * var(--scale)); height: calc(25px * var(--scale)); }
+    .card-amount { font-weight: bold; font-size: calc(12px * var(--scale)); margin-bottom: calc(0.5mm * var(--scale)); }
+    .card-ref { font-size: calc(10px * var(--scale)); margin-bottom: calc(0.5mm * var(--scale)); }
     .jbonly { font-weight: bold; }
-    .card-serial { font-family: 'Times New Roman'; font-size: 11px; margin-bottom: 1mm; }
-    .card-pin { font-family: 'Times New Roman'; font-size: 13px; margin-bottom: 1mm; }
+    .card-serial { font-family: 'Times New Roman'; font-size: calc(10px * var(--scale)); margin-bottom: calc(0.5mm * var(--scale)); }
+    .card-pin { font-family: 'Times New Roman'; font-size: calc(14px * var(--scale)); margin-bottom: calc(0.5mm * var(--scale)); }
     .pinonly { font-weight: bold; }
-    .card-date { font-size: 10px; color: #666; }
+    .card-date { font-size: calc(9px * var(--scale)); color: #666; }
 
-    .topit { display: flex; justify-content: space-between; align-items: center; }
+    .topit {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      flex-wrap: nowrap;
+    }
 
     .no-preview {
       text-align: center;
@@ -264,42 +274,32 @@
       reader.readAsText(file);
     });
 
-function parseCardData(text) {
-  const lines = text.split('\n'), cards = [];
-
-  for (const line of lines) {
-    if (!line.trim() || line.includes('Serial') || line.includes('Pin')) continue;
-    const parts = line.trim().split(/\s+/);
-
-    // --- Format 1: Serial Pin Network Amount Date ---
-    // Example: 00000034687996657 24737560435061426 MTN ₦100 2025-08-23 08:12:49
-    if (parts.length >= 5 && /^\d{14,}/.test(parts[0]) && /^\d{5,}/.test(parts[1])) {
-      cards.push({
-        serial: parts[0],
-        pin: parts[1],
-        network: parts[2],
-        amount: parts[3],
-        date: parts.slice(4).join(' ')
-      });
+    function parseCardData(text) {
+      const lines = text.split('\n'), cards = [];
+      for (const line of lines) {
+        if (!line.trim() || line.includes('Serial') || line.includes('Pin')) continue;
+        const parts = line.trim().split(/\s+/);
+        if (parts.length >= 5 && /^\d{14,}/.test(parts[0]) && /^\d{5,}/.test(parts[1])) {
+          cards.push({
+            serial: parts[0],
+            pin: parts[1],
+            network: parts[2],
+            amount: parts[3],
+            date: parts.slice(4).join(' ')
+          });
+        } else if (parts.length >= 6 && /^\d+$/.test(parts[0]) && parts[2].startsWith('@')) {
+          cards.push({
+            index: parts[0],
+            date: parts[1] + " " + parts[2],
+            network: parts[3],
+            amount: parts[4],
+            serial: parts[5],
+            pin: parts[6]
+          });
+        }
+      }
+      return cards;
     }
-
-    // --- Format 2: Index Date Network Amount Serial Pin ---
-    // Example: 1 01/01/1970 @01:00:00 MTN 100 00000034687996608 92469577422819753
-    else if (parts.length >= 6 && /^\d+$/.test(parts[0]) && parts[2].startsWith('@')) {
-      cards.push({
-        index: parts[0],
-        date: parts[1] + " " + parts[2], // join date + @time
-        network: parts[3],
-        amount: parts[4],
-        serial: parts[5],
-        pin: parts[6]
-      });
-    }
-  }
-
-  return cards;
-}
-
 
     addBtn.addEventListener('click', () => {
       const newCards = parseCardData(textInput.value.trim());
@@ -326,6 +326,28 @@ function parseCardData(text) {
       const cardsPerPage = rows * cols;
       const pageCount = Math.ceil(allCards.length / cardsPerPage);
       pageCountElement.textContent = `(${pageCount} page${pageCount > 1 ? 's' : ''})`;
+
+      // Calculate scale based on cell height
+      const page_inner_h_mm = 297 - 10; // A4 height minus 5mm padding on top and bottom
+      const gap_mm = 2;
+      const gaps_h_mm = (rows - 1) * gap_mm;
+      const row_h_mm = (page_inner_h_mm - gaps_h_mm) / rows;
+      const card_padding_v_mm = 4; // 2mm padding top + bottom
+
+      // Base measurements for 10 rows
+      const base_rows = 10;
+      const base_gaps_h_mm = (base_rows - 1) * gap_mm;
+      const base_row_h_mm = (page_inner_h_mm - base_gaps_h_mm) / base_rows;
+      const base_card_padding_v_mm = 4;
+      const base_inner_h_mm = base_row_h_mm - base_card_padding_v_mm;
+
+      // Calculate scale to maximize content size
+      const inner_h_mm = row_h_mm - card_padding_v_mm;
+      let scale = inner_h_mm / base_inner_h_mm;
+      // Cap scale to prevent overflow and ensure readability
+      scale = Math.min(1.2, Math.max(0.8, scale));
+      document.documentElement.style.setProperty('--scale', scale);
+
       previewContainer.innerHTML = '';
       for (let i = 0; i < allCards.length; i += cardsPerPage) {
         createPage(allCards.slice(i, i + cardsPerPage), rows, cols, i);
