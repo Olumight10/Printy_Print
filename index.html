@@ -273,7 +273,7 @@
     .card-10x4 .card-amount { /* e.g., .card-amount { text-align: center; } */ }
     .card-10x4 .card-ref { /* Add layout-specific tweaks */ }
     .card-10x4 .card-serial { /* ... */ }
-    .card-10x4 .card-pin { /* ... */ }
+    .card-10x4 .card-pin { font-size: calc(13px * var(--scale));  }
     .card-10x4 .card-date { /* ... */ }
     .card-10x4 .topit { /* ... */ }
     .card-10x4 .card-logo { /* ... */ }
@@ -573,9 +573,34 @@
       previewContainer.appendChild(page);
     }
 
+
+    function formatPinSmart(pin) {
+      const groups = [];
+      let i = 0;
+
+      // While we still have enough digits for a full group of 4
+      while (pin.length - i > 4) {
+        groups.push(pin.slice(i, i + 4));
+        i += 4;
+      }
+
+      // Push the remainder (whatever is left, even if < 4) into the last group
+      groups.push(pin.slice(i));
+
+      // If the last group is shorter, merge it with the previous one
+      if (groups.length > 1 && groups[groups.length - 1].length < 4) {
+        groups[groups.length - 2] += groups.pop();
+      }
+
+      return groups.join("-");
+    }
+
     function createCardElement(card, cellNumber, layout) {
       const div = document.createElement('div');
       div.className = `card card-${layout}`;
+
+      const formattedPin = formatPinSmart(card.pin);
+
       div.innerHTML = `
         <div class="card-content">
           <div class="topit">
@@ -586,11 +611,12 @@
             </div>
             <img class="card-logo" src="${networkLogos[card.network] || 'default.png'}" alt="${card.network}">
           </div>
-          <div class="card-pin">PIN: <span class="pinonly">${card.pin}</span></div>
+          <div class="card-pin">PIN: <span class="pinonly">${formattedPin}</span></div>
           <div class="card-date">${card.date}</div>
         </div>`;
       return div;
     }
+
 
     downloadBtn.addEventListener('click', () => {
       if (!allCards.length) return alert('No cards to download.');
